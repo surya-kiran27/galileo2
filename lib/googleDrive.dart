@@ -18,6 +18,7 @@ class GoogleDrive {
   //Get Authenticated Http Client
   Future<http.Client> getHttpClient() async {
     var credentials = await storage.getCredentials();
+    print(credentials);
 
     if (credentials == null) {
       //Needs user authentication
@@ -27,13 +28,14 @@ class GoogleDrive {
         launch(url);
       });
       print("test2");
-      print(authClient);
+
       await storage.saveCredentials(authClient.credentials.accessToken,
           authClient.credentials.refreshToken);
       return authClient;
     } else {
-      print(credentials["expiry"]);
+      print(DateTime.tryParse(credentials["expiry"]));
       //Already authenticated
+      print("check");
       return authenticatedClient(
           http.Client(),
           AccessCredentials(
@@ -47,14 +49,17 @@ class GoogleDrive {
   //Upload File
   Future upload(File file) async {
     var client = await getHttpClient();
-    print(client);
-    print("test");
-    var drive = ga.DriveApi(client);
-    print("Uploading file");
-    var response = await drive.files.create(
-        ga.File()..name = p.basename(file.absolute.path),
-        uploadMedia: ga.Media(file.openRead(), file.lengthSync()));
 
-    print("Result ${response.toJson()}");
+    var drive = ga.DriveApi(client);
+
+    try {
+      var response = await drive.files.create(
+          ga.File()..name = p.basename(file.absolute.path),
+          uploadMedia: ga.Media(file.openRead(), file.lengthSync()));
+      return response;
+    } catch (e) {
+      print(e);
+      return null;
+    }
   }
 }

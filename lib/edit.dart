@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galileo2/googleDrive.dart';
+import 'package:googleapis/cloudshell/v1.dart';
 import 'dart:ui' as ui;
 import 'package:http/http.dart' as http;
 import 'package:rflutter_alert/rflutter_alert.dart';
@@ -35,6 +36,7 @@ class _EditState extends State<Edit> {
   String ip_address;
   bool _dragging = false;
   double _lowerValue = 40;
+  String fileName = "";
   final drive = GoogleDrive();
 
   @override
@@ -337,29 +339,87 @@ class _EditState extends State<Edit> {
               FlatButton(
                 child: Icon(Icons.save),
                 onPressed: () async {
-                  ui.PictureRecorder recorder = ui.PictureRecorder();
-                  Canvas canvas = Canvas(recorder);
-                  print(this.circle.length);
-                  ImageEditor painter = ImageEditor(this._image, this.circle);
-                  Size s = new Size(
-                      _image.width.toDouble(), _image.height.toDouble());
-                  painter.paint(canvas, s);
-                  ui.Image img = await recorder
-                      .endRecording()
-                      .toImage(_image.width, _image.height);
+                  Alert(
+                      context: context,
+                      title: "Enter file name",
+                      closeFunction: () {},
+                      content: Container(
+                        height: 200,
+                        width: double.maxFinite,
+                        child: ListView(children: <Widget>[
+                          Text("File Name"),
+                          TextField(
+                            onChanged: (text) {
+                              setState(() {
+                                fileName = text;
+                              });
+                            },
+                          )
+                        ]),
+                      ),
+                      // content: Row(
+                      //   children: <Widget>[
+                      //     Text("File Name"),
+                      //     TextField(
+                      //       onChanged: (text) {
+                      //         setState(() {
+                      //           fileName = text;
+                      //         });
+                      //       },
+                      //     )
+                      //   ],
+                      // ),
+                      buttons: [
+                        DialogButton(
+                          onPressed: () async {
+                            ui.PictureRecorder recorder = ui.PictureRecorder();
+                            Canvas canvas = Canvas(recorder);
+                            print(this.circle.length);
+                            ImageEditor painter =
+                                ImageEditor(this._image, this.circle);
+                            Size s = new Size(_image.width.toDouble(),
+                                _image.height.toDouble());
+                            painter.paint(canvas, s);
+                            ui.Image img = await recorder
+                                .endRecording()
+                                .toImage(_image.width, _image.height);
 
-                  final pngBytes =
-                      await img.toByteData(format: ImageByteFormat.png);
+                            final pngBytes = await img.toByteData(
+                                format: ImageByteFormat.png);
 
-                  Directory directory = await getExternalStorageDirectory();
-                  String path = directory.path;
-                  print(path);
-                  await Directory('$path/$directoryName')
-                      .create(recursive: true);
-                  File upload = await File('$path/${formattedDate()}.png')
-                      .writeAsBytes(pngBytes.buffer.asInt8List());
+                            Directory directory =
+                                await getExternalStorageDirectory();
+                            String path = directory.path + "/Download";
+                            print(path);
+                            await Directory('$path/$directoryName')
+                                .create(recursive: true);
 
-                  drive.upload(upload);
+                            File upload = await File('$path/${fileName}.png')
+                                .writeAsBytes(pngBytes.buffer.asInt8List());
+                            Navigator.pop(context);
+                            showInSnackBar("Uploading please wait...");
+                            var res = await drive.upload(upload);
+                            if (res != null)
+                              showInSnackBar("File uploaded to drive ");
+                            else {
+                              showInSnackBar("Failed to upload");
+                            }
+                          },
+                          child: Text(
+                            "Upload",
+                            style: TextStyle(color: Colors.white, fontSize: 20),
+                          ),
+                        ),
+                        DialogButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          child: Text(
+                            "Cancel",
+                            style: TextStyle(color: Colors.white, fontSize: 20),
+                          ),
+                        )
+                      ]).show();
                 },
               )
             ],
@@ -368,24 +428,6 @@ class _EditState extends State<Edit> {
       ),
     );
   }
-}
-
-String formattedDate() {
-  DateTime dateTime = DateTime.now();
-  String dateTimeString = 'Galileo' +
-      dateTime.year.toString() +
-      dateTime.month.toString() +
-      dateTime.day.toString() +
-      dateTime.hour.toString() +
-      ':' +
-      dateTime.minute.toString() +
-      ':' +
-      dateTime.second.toString() +
-      ':' +
-      dateTime.millisecond.toString() +
-      ':' +
-      dateTime.microsecond.toString();
-  return dateTimeString;
 }
 
 class Circle {
