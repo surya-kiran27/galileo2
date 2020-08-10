@@ -104,327 +104,342 @@ class _EditState extends State<Edit> {
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Align(
-            alignment: Alignment.centerRight,
-            child: FloatingActionButton.extended(
-              onPressed: () {
-                _getSensorData();
-              },
-              label: Text("Get Data"),
-            ),
-          ),
-          _image != null
-              ? Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Container(
-                    width: double.infinity,
-                    height: 500.0,
-                    child: Zoom(
-                      initZoom: 0,
-                      backgroundColor: Colors.transparent,
-                      width: _image.width.toDouble(),
-                      height: _image.height.toDouble(),
-                      child: Stack(
-                        children: <Widget>[
-                          CustomPaint(
-                            size: Size(_image.width.toDouble(),
-                                _image.height.toDouble()),
-                            painter: ImageEditor(_image, circle),
-                            child: Container(),
-                          ),
-                          Positioned(
-                            top: yPos,
-                            left: xPos,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onPanStart: (details) => {
-                                _dragging = true,
-                              },
-                              onPanEnd: (details) {
-                                _dragging = false;
-                              },
-                              onPanUpdate: (details) {
-                                if (_dragging) {
-                                  setState(() {
-                                    xPos += details.delta.dx;
-                                    yPos += details.delta.dy;
-                                  });
-                                }
-                              },
-                              child: Icon(Icons.location_on,
-                                  color: Colors.red, size: _image.height * 0.1),
-                            ),
-                          )
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              : SizedBox.shrink(),
-          ButtonBar(
-            buttonTextTheme: ButtonTextTheme.accent,
-            alignment: MainAxisAlignment.center,
+      body: Container(
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: <Widget>[
-              FlatButton(
-                child: Icon(Icons.settings_remote),
-                onPressed: () {
-                  setState(() {
-                    Alert(
-                        context: context,
-                        title: "Edit IP Address",
-                        closeFunction: () {},
-                        content: Column(
-                          children: <Widget>[
-                            TextFormField(
-                              onChanged: (text) {
-                                setState(() {
-                                  ip_address = text;
-                                });
+              Align(
+                alignment: Alignment.bottomRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 35.0),
+                  child: FloatingActionButton.extended(
+                    onPressed: () {
+                      _getSensorData();
+                    },
+                    label: Text("Get Data"),
+                  ),
+                ),
+              ),
+              _image != null
+                  ? Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Container(
+                        width: double.infinity,
+                        height: 500.0,
+                        child: Zoom(
+                          initZoom: 0,
+                          backgroundColor: Colors.transparent,
+                          width: _image.width.toDouble(),
+                          height: _image.height.toDouble(),
+                          child: Stack(
+                            children: <Widget>[
+                              CustomPaint(
+                                size: Size(_image.width.toDouble(),
+                                    _image.height.toDouble()),
+                                painter: ImageEditor(_image, circle),
+                                child: Container(),
+                              ),
+                              Positioned(
+                                top: yPos,
+                                left: xPos,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.translucent,
+                                  onPanStart: (details) => {
+                                    _dragging = true,
+                                  },
+                                  onPanEnd: (details) {
+                                    _dragging = false;
+                                  },
+                                  onPanUpdate: (details) {
+                                    if (_dragging) {
+                                      setState(() {
+                                        xPos += details.delta.dx;
+                                        yPos += details.delta.dy;
+                                      });
+                                    }
+                                  },
+                                  child: Icon(Icons.location_on,
+                                      color: Colors.red,
+                                      size: _image.height * 0.1),
+                                ),
+                              )
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  : SizedBox.shrink(),
+              ButtonBar(
+                buttonTextTheme: ButtonTextTheme.accent,
+                alignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  FlatButton(
+                    child: Icon(Icons.settings_remote),
+                    onPressed: () {
+                      setState(() {
+                        Alert(
+                            context: context,
+                            title: "Edit IP Address",
+                            closeFunction: () {},
+                            content: Column(
+                              children: <Widget>[
+                                TextFormField(
+                                  onChanged: (text) {
+                                    setState(() {
+                                      ip_address = text;
+                                    });
+                                  },
+                                  validator: (text) {
+                                    String zeroTo255 = "(\\d{1,2}|(0|1)\\" +
+                                        "d{2}|2[0-4]\\d|25[0-5])";
+                                    String regex = zeroTo255 +
+                                        "\\." +
+                                        zeroTo255 +
+                                        "\\." +
+                                        zeroTo255 +
+                                        "\\." +
+                                        zeroTo255;
+                                    RegExp regExp = new RegExp(regex);
+                                    if (!regExp.hasMatch(text)) {
+                                      return 'invalid ip address';
+                                    }
+                                    return null;
+                                  },
+                                  decoration: InputDecoration(
+                                    labelText: 'IP ADDRESS',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            buttons: [
+                              DialogButton(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                },
+                                child: Text(
+                                  "Done",
+                                  style: TextStyle(
+                                      color: Colors.white, fontSize: 20),
+                                ),
+                              )
+                            ]).show();
+                      });
+                    },
+                  ),
+                  FlatButton(
+                    child: Icon(Icons.adjust),
+                    onPressed: () {
+                      Alert(
+                          context: context,
+                          title: "Edit circle radius",
+                          closeFunction: () {},
+                          content: Column(
+                            children: <Widget>[
+                              // Container(
+                              //   width: 400,
+                              //   height: 400,
+                              //   child: CustomPaint(
+                              //     painter: SampleCircle(_lowerValue),
+                              //     child: Container(),
+                              //   ),
+                              // ),
+                              Container(
+                                width: 300,
+                                height: 200,
+                                child: FlutterSlider(
+                                  values: [_lowerValue],
+                                  max: 300,
+                                  min: 10,
+                                  onDragging:
+                                      (handlerIndex, lowerValue, upperValue) {
+                                    setState(() {
+                                      _lowerValue = lowerValue;
+                                    });
+                                  },
+                                  jump: true,
+                                ),
+                              )
+                            ],
+                          ),
+                          buttons: [
+                            DialogButton(
+                              onPressed: () {
+                                Navigator.pop(context);
                               },
-                              validator: (text) {
-                                String zeroTo255 = "(\\d{1,2}|(0|1)\\" +
-                                    "d{2}|2[0-4]\\d|25[0-5])";
-                                String regex = zeroTo255 +
-                                    "\\." +
-                                    zeroTo255 +
-                                    "\\." +
-                                    zeroTo255 +
-                                    "\\." +
-                                    zeroTo255;
-                                RegExp regExp = new RegExp(regex);
-                                if (!regExp.hasMatch(text)) {
-                                  return 'invalid ip address';
+                              child: Text(
+                                "Done",
+                                style: TextStyle(
+                                    color: Colors.white, fontSize: 20),
+                              ),
+                            )
+                          ]).show();
+                    },
+                  ),
+                  FlatButton(
+                    child: Icon(Icons.undo),
+                    onPressed: () {
+                      setState(() {
+                        if (circle.length >= 1)
+                          circle.removeLast();
+                        else {
+                          showInSnackBar("Points are empty");
+                        }
+                      });
+                    },
+                  ),
+                  FlatButton(
+                    child: Icon(Icons.add_location),
+                    onPressed: () {
+                      if (temp != null) {
+                        setState(() {
+                          if (temp <= 15 && temp >= 10) {
+                            circle.add(Circle(
+                                Colors.blue[300],
+                                Offset(xPos + _image.height * 0.05,
+                                    yPos + _image.height * 0.07),
+                                _lowerValue,
+                                temp));
+                          } else if (temp <= 20 && temp > 15) {
+                            circle.add(Circle(
+                                Colors.blue,
+                                Offset(xPos + _image.height * 0.05,
+                                    yPos + _image.height * 0.07),
+                                _lowerValue,
+                                temp));
+                          } else if (temp <= 25 && temp > 20) {
+                            circle.add(Circle(
+                                Colors.blue[700],
+                                Offset(xPos + _image.height * 0.05,
+                                    yPos + _image.height * 0.07),
+                                _lowerValue,
+                                temp));
+                          } else if (temp <= 30 && temp > 25) {
+                            circle.add(Circle(
+                                Colors.red,
+                                Offset(xPos + _image.height * 0.05,
+                                    yPos + _image.height * 0.07),
+                                _lowerValue,
+                                temp));
+                          } else if (temp <= 35 && temp > 30) {
+                            circle.add(Circle(
+                                Colors.red[700],
+                                Offset(xPos + _image.height * 0.05,
+                                    yPos + _image.height * 0.07),
+                                _lowerValue,
+                                temp));
+                          } else if (temp <= 45 && temp > 35) {
+                            circle.add(Circle(
+                                Colors.red[900],
+                                Offset(xPos + _image.height * 0.05,
+                                    yPos + _image.height * 0.07),
+                                _lowerValue,
+                                temp));
+                          }
+                        });
+                      } else {
+                        showInSnackBar("Please click on Get Data first");
+                      }
+                    },
+                  ),
+                  FlatButton(
+                    child: Icon(Icons.save),
+                    onPressed: () async {
+                      Alert(
+                          context: context,
+                          title: "Enter file name",
+                          closeFunction: () {},
+                          content: Container(
+                            height: 200,
+                            width: double.maxFinite,
+                            child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: <Widget>[
+                                  Text("File Name"),
+                                  TextField(
+                                    onChanged: (text) {
+                                      setState(() {
+                                        fileName = text;
+                                      });
+                                    },
+                                  )
+                                ]),
+                          ),
+                          // content: Row(
+                          //   children: <Widget>[
+                          //     Text("File Name"),
+                          //     TextField(
+                          //       onChanged: (text) {
+                          //         setState(() {
+                          //           fileName = text;
+                          //         });
+                          //       },
+                          //     )
+                          //   ],
+                          // ),
+                          buttons: [
+                            DialogButton(
+                              onPressed: () async {
+                                ui.PictureRecorder recorder =
+                                    ui.PictureRecorder();
+                                Canvas canvas = Canvas(recorder);
+                                print(this.circle.length);
+                                ImageEditor painter =
+                                    ImageEditor(this._image, this.circle);
+                                Size s = new Size(_image.width.toDouble(),
+                                    _image.height.toDouble());
+                                painter.paint(canvas, s);
+                                ui.Image img = await recorder
+                                    .endRecording()
+                                    .toImage(_image.width, _image.height);
+
+                                final pngBytes = await img.toByteData(
+                                    format: ImageByteFormat.png);
+
+                                Directory directory =
+                                    await getExternalStorageDirectory();
+                                String path = directory.path + "/Download";
+                                print(path);
+                                await Directory('$path/$directoryName')
+                                    .create(recursive: true);
+
+                                File upload = await File(
+                                        '$path/${fileName}.png')
+                                    .writeAsBytes(pngBytes.buffer.asInt8List());
+                                Navigator.pop(context);
+                                showInSnackBar("Uploading please wait...");
+                                var res = await drive.upload(upload);
+                                if (res != null)
+                                  showInSnackBar("File uploaded to drive ");
+                                else {
+                                  showInSnackBar("Failed to upload");
                                 }
-                                return null;
                               },
-                              decoration: InputDecoration(
-                                labelText: 'IP ADDRESS',
+                              child: Text(
+                                "Upload",
+                                style: TextStyle(
+                                    color: Colors.white, fontSize: 20),
                               ),
                             ),
-                          ],
-                        ),
-                        buttons: [
-                          DialogButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
-                            child: Text(
-                              "Done",
-                              style:
-                                  TextStyle(color: Colors.white, fontSize: 20),
-                            ),
-                          )
-                        ]).show();
-                  });
-                },
-              ),
-              FlatButton(
-                child: Icon(Icons.adjust),
-                onPressed: () {
-                  Alert(
-                      context: context,
-                      title: "Edit circle radius",
-                      closeFunction: () {},
-                      content: Column(
-                        children: <Widget>[
-                          // Container(
-                          //   width: 400,
-                          //   height: 400,
-                          //   child: CustomPaint(
-                          //     painter: SampleCircle(_lowerValue),
-                          //     child: Container(),
-                          //   ),
-                          // ),
-                          Container(
-                            width: 300,
-                            height: 200,
-                            child: FlutterSlider(
-                              values: [_lowerValue],
-                              max: 300,
-                              min: 10,
-                              onDragging:
-                                  (handlerIndex, lowerValue, upperValue) {
-                                setState(() {
-                                  _lowerValue = lowerValue;
-                                });
+                            DialogButton(
+                              onPressed: () {
+                                Navigator.pop(context);
                               },
-                              jump: true,
-                            ),
-                          )
-                        ],
-                      ),
-                      buttons: [
-                        DialogButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
-                          child: Text(
-                            "Done",
-                            style: TextStyle(color: Colors.white, fontSize: 20),
-                          ),
-                        )
-                      ]).show();
-                },
-              ),
-              FlatButton(
-                child: Icon(Icons.undo),
-                onPressed: () {
-                  setState(() {
-                    if (circle.length >= 1)
-                      circle.removeLast();
-                    else {
-                      showInSnackBar("Points are empty");
-                    }
-                  });
-                },
-              ),
-              FlatButton(
-                child: Icon(Icons.add_location),
-                onPressed: () {
-                  if (temp != null) {
-                    setState(() {
-                      if (temp <= 15 && temp >= 10) {
-                        circle.add(Circle(
-                            Colors.blue[300],
-                            Offset(xPos + _image.height * 0.05,
-                                yPos + _image.height * 0.07),
-                            _lowerValue,
-                            temp));
-                      } else if (temp <= 20 && temp > 15) {
-                        circle.add(Circle(
-                            Colors.blue,
-                            Offset(xPos + _image.height * 0.05,
-                                yPos + _image.height * 0.07),
-                            _lowerValue,
-                            temp));
-                      } else if (temp <= 25 && temp > 20) {
-                        circle.add(Circle(
-                            Colors.blue[700],
-                            Offset(xPos + _image.height * 0.05,
-                                yPos + _image.height * 0.07),
-                            _lowerValue,
-                            temp));
-                      } else if (temp <= 30 && temp > 25) {
-                        circle.add(Circle(
-                            Colors.red,
-                            Offset(xPos + _image.height * 0.05,
-                                yPos + _image.height * 0.07),
-                            _lowerValue,
-                            temp));
-                      } else if (temp <= 35 && temp > 30) {
-                        circle.add(Circle(
-                            Colors.red[700],
-                            Offset(xPos + _image.height * 0.05,
-                                yPos + _image.height * 0.07),
-                            _lowerValue,
-                            temp));
-                      } else if (temp <= 45 && temp > 35) {
-                        circle.add(Circle(
-                            Colors.red[900],
-                            Offset(xPos + _image.height * 0.05,
-                                yPos + _image.height * 0.07),
-                            _lowerValue,
-                            temp));
-                      }
-                    });
-                  } else {
-                    showInSnackBar("Please click on Get Data first");
-                  }
-                },
-              ),
-              FlatButton(
-                child: Icon(Icons.save),
-                onPressed: () async {
-                  Alert(
-                      context: context,
-                      title: "Enter file name",
-                      closeFunction: () {},
-                      content: Container(
-                        height: 200,
-                        width: double.maxFinite,
-                        child: ListView(children: <Widget>[
-                          Text("File Name"),
-                          TextField(
-                            onChanged: (text) {
-                              setState(() {
-                                fileName = text;
-                              });
-                            },
-                          )
-                        ]),
-                      ),
-                      // content: Row(
-                      //   children: <Widget>[
-                      //     Text("File Name"),
-                      //     TextField(
-                      //       onChanged: (text) {
-                      //         setState(() {
-                      //           fileName = text;
-                      //         });
-                      //       },
-                      //     )
-                      //   ],
-                      // ),
-                      buttons: [
-                        DialogButton(
-                          onPressed: () async {
-                            ui.PictureRecorder recorder = ui.PictureRecorder();
-                            Canvas canvas = Canvas(recorder);
-                            print(this.circle.length);
-                            ImageEditor painter =
-                                ImageEditor(this._image, this.circle);
-                            Size s = new Size(_image.width.toDouble(),
-                                _image.height.toDouble());
-                            painter.paint(canvas, s);
-                            ui.Image img = await recorder
-                                .endRecording()
-                                .toImage(_image.width, _image.height);
-
-                            final pngBytes = await img.toByteData(
-                                format: ImageByteFormat.png);
-
-                            Directory directory =
-                                await getExternalStorageDirectory();
-                            String path = directory.path + "/Download";
-                            print(path);
-                            await Directory('$path/$directoryName')
-                                .create(recursive: true);
-
-                            File upload = await File('$path/${fileName}.png')
-                                .writeAsBytes(pngBytes.buffer.asInt8List());
-                            Navigator.pop(context);
-                            showInSnackBar("Uploading please wait...");
-                            var res = await drive.upload(upload);
-                            if (res != null)
-                              showInSnackBar("File uploaded to drive ");
-                            else {
-                              showInSnackBar("Failed to upload");
-                            }
-                          },
-                          child: Text(
-                            "Upload",
-                            style: TextStyle(color: Colors.white, fontSize: 20),
-                          ),
-                        ),
-                        DialogButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
-                          child: Text(
-                            "Cancel",
-                            style: TextStyle(color: Colors.white, fontSize: 20),
-                          ),
-                        )
-                      ]).show();
-                },
+                              child: Text(
+                                "Cancel",
+                                style: TextStyle(
+                                    color: Colors.white, fontSize: 20),
+                              ),
+                            )
+                          ]).show();
+                    },
+                  )
+                ],
               )
             ],
-          )
-        ],
+          ),
+        ),
       ),
     );
   }
