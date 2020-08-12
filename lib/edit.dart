@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galileo2/googleDrive.dart';
+import 'package:galileo2/main.dart';
 import 'package:googleapis/cloudshell/v1.dart';
 import 'dart:ui' as ui;
 import 'package:http/http.dart' as http;
@@ -40,6 +41,8 @@ class _EditState extends State<Edit> {
   bool _dragging = false;
   double _lowerValue = 40;
   String fileName = "";
+  Offset _tapPosition;
+
   final drive = GoogleDrive();
 
   @override
@@ -90,6 +93,12 @@ class _EditState extends State<Edit> {
     }
   }
 
+  void _handleTapDown(TapDownDetails details) {
+    setState(() {
+      _tapPosition = details.globalPosition;
+    });
+  }
+
   void showInSnackBar(String value) {
     _scaffoldKey.currentState.showSnackBar(new SnackBar(
         content: new Text(value),
@@ -115,8 +124,43 @@ class _EditState extends State<Edit> {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: <Widget>[
             ButtonBar(
-              buttonPadding: EdgeInsets.all(5),
+              alignment: MainAxisAlignment.spaceEvenly,
               children: <Widget>[
+                FlatButton(
+                  color: Colors.black,
+                  child: Text("Back", style: TextStyle(color: Colors.white)),
+                  onPressed: () {
+                    Alert(
+                      closeFunction: () {},
+                      context: context,
+                      type: AlertType.error,
+                      title: "Are you sure ?",
+                      buttons: [
+                        DialogButton(
+                          child: Text(
+                            "Yes",
+                            style: TextStyle(color: Colors.white, fontSize: 20),
+                          ),
+                          onPressed: () {
+                            Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => MyApp()));
+                          },
+                          width: 120,
+                        ),
+                        DialogButton(
+                          child: Text(
+                            "No",
+                            style: TextStyle(color: Colors.white, fontSize: 20),
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                          width: 120,
+                        )
+                      ],
+                    ).show();
+                  },
+                ),
                 FlatButton(
                   color: Colors.amber,
                   child: Text("Reset Marker",
@@ -144,6 +188,7 @@ class _EditState extends State<Edit> {
                       width: width,
                       height: height * 0.80,
                       child: Zoom(
+                        doubleTapZoom: false,
                         initZoom: 0,
                         backgroundColor: Colors.transparent,
                         width: _image.width.toDouble(),
@@ -159,7 +204,7 @@ class _EditState extends State<Edit> {
                               top: yPos,
                               left: xPos,
                               child: GestureDetector(
-                                behavior: HitTestBehavior.translucent,
+                                behavior: HitTestBehavior.opaque,
                                 onPanStart: (details) => {
                                   _dragging = true,
                                 },
