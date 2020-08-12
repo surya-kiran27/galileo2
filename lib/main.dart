@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galileo2/edit.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:ui' as ui;
-import 'dart:ui';
 
 void main() => runApp(MyApp());
 
@@ -35,7 +33,8 @@ class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
   File _image;
   final picker = ImagePicker();
-
+  double width;
+  double height;
   Future getImage() async {
     final pickedFile = await picker.getImage(source: ImageSource.gallery);
     setState(() {
@@ -51,6 +50,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    setState(() {
+      height = MediaQuery.of(context).size.height;
+      width = MediaQuery.of(context).size.width;
+    });
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),

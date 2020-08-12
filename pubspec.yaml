@@ -33,6 +33,7 @@ dependencies:
   flutter_xlider: ^3.4.0
   url_launcher: ^5.5.0
   dio: ^3.0.9
+  image: ^2.1.14
 
 dev_dependencies:
   flutter_test:
