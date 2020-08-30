@@ -2,19 +2,17 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui';
-import 'dart:async';
+import 'package:ext_storage/ext_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:galileo2/googleDrive.dart';
 import 'package:galileo2/main.dart';
-import 'package:googleapis/cloudshell/v1.dart';
 import 'dart:ui' as ui;
-import 'package:http/http.dart' as http;
-import 'package:rflutter_alert/rflutter_alert.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zoom_widget/zoom_widget.dart';
 import 'package:flutter_xlider/flutter_xlider.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
-import 'package:image/image.dart' as img;
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:math';
 
 const directoryName = 'Galileo';
 
@@ -28,39 +26,63 @@ class Edit extends StatefulWidget {
 }
 
 class _EditState extends State<Edit> {
-  double width;
-  double height;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _zoomWidget = GlobalKey();
   ui.Image _image;
   double xPos = 0.0;
   double yPos = 0.0;
   List<Circle> circle = new List();
-  String _platformVersion = 'Unknown';
   double temp, humidity;
-  String ip_address;
+  String ip_address = "";
   bool _dragging = false;
   double _lowerValue = 40;
   String fileName = "";
-  Offset _tapPosition;
-
+  LongPressStartDetails _tapPosition;
+  double x;
   final drive = GoogleDrive();
+  final _random = new Random();
 
   @override
   void initState() {
     _loadImage();
+    _loadStorage();
+  }
+
+  int next(int min, int max) => min + _random.nextInt(max - min);
+  _loadStorage() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    print(prefs.getString("ipaddress"));
+    if (prefs.containsKey("ipaddress")) {
+      print(prefs.getString("ipaddress"));
+      setState(() {
+        ip_address = prefs.getString("ipaddress");
+      });
+    }
   }
 
   _loadImage() async {
-    final Uint8List bytes = await widget.image.readAsBytes();
-    final ui.Codec codec = await ui.instantiateImageCodec(bytes);
-    final ui.Image image = (await codec.getNextFrame()).image;
-    setState(() {
-      _image = image;
-    });
+    try {
+      final Uint8List bytes = await widget.image.readAsBytes();
+      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
+      final ui.Image image = (await codec.getNextFrame()).image;
+      setState(() {
+        _image = image;
+      });
+    } catch (e) {
+      print(e);
+    }
   }
 
   _getSensorData() async {
     if (ip_address != null && ip_address.length > 0) {
+      if (ip_address.toLowerCase() == "demo") {
+        double randomTemp = next(10, 40).toDouble();
+        setState(() {
+          temp = randomTemp;
+        });
+        showInSnackBar("Temp is " + randomTemp.toString());
+        return;
+      }
       try {
         Dio dio = new Dio(); // with default Options
         dio.options.receiveTimeout = 3000;
@@ -93,12 +115,6 @@ class _EditState extends State<Edit> {
     }
   }
 
-  void _handleTapDown(TapDownDetails details) {
-    setState(() {
-      _tapPosition = details.globalPosition;
-    });
-  }
-
   void showInSnackBar(String value) {
     _scaffoldKey.currentState.showSnackBar(new SnackBar(
         content: new Text(value),
@@ -109,408 +125,420 @@ class _EditState extends State<Edit> {
             borderRadius: BorderRadius.all(Radius.circular(5)))));
   }
 
+  void saveImage() async {
+    showInSnackBar("Saving image...");
+    ui.PictureRecorder recorder = ui.PictureRecorder();
+    Canvas canvas = Canvas(recorder);
+    ImageEditor painter = ImageEditor(this._image, this.circle);
+    Size s = new Size(_image.width.toDouble(), _image.height.toDouble());
+    painter.paint(canvas, s);
+    ui.Image img =
+        await recorder.endRecording().toImage(_image.width, _image.height);
+
+    final pngBytes = await img.toByteData(format: ImageByteFormat.png);
+    var status = await Permission.storage.status;
+    if (!status.isGranted) {
+      await Permission.storage.request();
+    }
+    try {
+      if (status.isGranted) {
+        print("check saving");
+        String directory = await ExtStorage.getExternalStoragePublicDirectory(
+            ExtStorage.DIRECTORY_DOCUMENTS);
+        String path = directory + "/Galileo";
+
+        await Directory('$path').create(recursive: true);
+
+        File upload = await File('$path/${fileName}.png')
+            .writeAsBytes(pngBytes.buffer.asInt8List());
+        showInSnackBar("Saved at " + upload.path);
+        showInSnackBar("Uploading please wait...");
+        var res = await drive.upload(upload);
+        if (res != null)
+          showInSnackBar("File uploaded to drive ");
+        else {
+          showInSnackBar("Failed to upload");
+        }
+      }
+    } catch (e) {
+      print(e);
+      showInSnackBar("Failed to get downloads directory");
+    }
+  }
+
+  showBackAlertDialog(BuildContext context) {
+    // set up the button
+    Widget okButton = FlatButton(
+      child: Text("YES"),
+      onPressed: () async {
+        Navigator.of(context, rootNavigator: true).pop();
+        Navigator.pushReplacement(
+            context, MaterialPageRoute(builder: (context) => MyApp()));
+      },
+    );
+
+    Widget closeButton = FlatButton(
+      child: Text("NO"),
+      onPressed: () async {
+        Navigator.of(context, rootNavigator: true).pop();
+      },
+    );
+
+    // set up the AlertDialog
+    AlertDialog alert = AlertDialog(
+      title: Text("Are you sure ?"),
+      actions: [closeButton, okButton],
+    );
+
+    // show the dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return alert;
+      },
+    );
+  }
+
+  showIpAddressAlertDialog() {
+    // set up the button
+    Widget okButton = FlatButton(
+        child: Text("Done"),
+        onPressed: () async {
+          SharedPreferences prefs = await SharedPreferences.getInstance();
+          prefs.setString("ipaddress", ip_address);
+          Navigator.of(context, rootNavigator: true).pop();
+        });
+    Widget field = SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          TextFormField(
+            onChanged: (text) {
+              setState(() {
+                ip_address = text;
+              });
+            },
+            initialValue: ip_address,
+            decoration: InputDecoration(
+              labelText: 'IP ADDRESS',
+            ),
+          ),
+          Text("Enter 'demo' for demo mode")
+        ],
+      ),
+    );
+
+    // set up the AlertDialog
+    AlertDialog alert = AlertDialog(
+      title: Text("Enter IP ADDRESS"),
+      actions: [okButton],
+      content: field,
+    );
+
+    // show the dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return alert;
+      },
+    );
+  }
+
+  showCircleRadiusAlertDialog() {
+    // set up the button
+    Widget okButton = FlatButton(
+      child: Text("Done"),
+      onPressed: () {
+        Navigator.of(context, rootNavigator: true).pop();
+      },
+    );
+    Widget field = SingleChildScrollView(
+      child: Column(
+        children: <Widget>[
+          Container(
+            height: 200,
+            width: 300,
+            child: FlutterSlider(
+              values: [_lowerValue],
+              max: 300,
+              min: 10,
+              onDragging: (handlerIndex, lowerValue, upperValue) {
+                setState(() {
+                  _lowerValue = lowerValue;
+                });
+              },
+              jump: true,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // set up the AlertDialog
+    AlertDialog alert = AlertDialog(
+      title: Text("Circle radius"),
+      actions: [okButton],
+      content: field,
+    );
+
+    // show the dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return alert;
+      },
+    );
+  }
+
+  showSaveFileAlertDialog() {
+    Widget okButton = FlatButton(
+        child: Text("Upload"),
+        onPressed: () async {
+          if (fileName != "") {
+            Navigator.of(context, rootNavigator: true).pop();
+            saveImage();
+          } else {
+            showInSnackBar("Invalid file name");
+          }
+        });
+    Widget cancelButton = FlatButton(
+      child: Text("Cancel"),
+      onPressed: () {
+        Navigator.of(context, rootNavigator: true).pop();
+      },
+    );
+    Widget field = SingleChildScrollView(
+      child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text("File Name"),
+            TextField(
+              onChanged: (text) {
+                setState(() {
+                  fileName = text;
+                });
+              },
+            )
+          ]),
+    );
+
+    // set up the AlertDialog
+    AlertDialog alert = AlertDialog(
+      title: Text("Enter File Name"),
+      actions: [cancelButton, okButton],
+      content: field,
+    );
+
+    // show the dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return alert;
+      },
+    );
+  }
+
+  @override
+  dispose() {
+    // you need this
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    setState(() {
-      height = MediaQuery.of(context).size.height;
-      width = MediaQuery.of(context).size.width;
-    });
-
     return Scaffold(
       key: _scaffoldKey,
+      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomPadding: false,
       body: Container(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: <Widget>[
-            ButtonBar(
-              alignment: MainAxisAlignment.spaceEvenly,
-              children: <Widget>[
-                FlatButton(
-                  color: Colors.black,
-                  child: Text("Back", style: TextStyle(color: Colors.white)),
-                  onPressed: () {
-                    Alert(
-                      closeFunction: () {},
-                      context: context,
-                      type: AlertType.error,
-                      title: "Are you sure ?",
-                      buttons: [
-                        DialogButton(
-                          child: Text(
-                            "Yes",
-                            style: TextStyle(color: Colors.white, fontSize: 20),
+          child: _image != null
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: ButtonBar(
+                        alignment: MainAxisAlignment.spaceEvenly,
+                        children: <Widget>[
+                          FlatButton(
+                            color: Colors.black,
+                            child: Text("Back",
+                                style: TextStyle(color: Colors.white)),
+                            onPressed: () {
+                              showBackAlertDialog(context);
+                            },
                           ),
-                          onPressed: () {
-                            Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) => MyApp()));
-                          },
-                          width: 120,
-                        ),
-                        DialogButton(
-                          child: Text(
-                            "No",
-                            style: TextStyle(color: Colors.white, fontSize: 20),
+                          FlatButton(
+                            color: Colors.amber,
+                            child: Text("Reset Marker",
+                                style: TextStyle(color: Colors.white)),
+                            onPressed: () {
+                              setState(() {
+                                xPos = _image.width / 2;
+                                yPos = _image.height / 2;
+                              });
+                            },
                           ),
-                          onPressed: () => Navigator.pop(context),
-                          width: 120,
-                        )
-                      ],
-                    ).show();
-                  },
-                ),
-                FlatButton(
-                  color: Colors.amber,
-                  child: Text("Reset Marker",
-                      style: TextStyle(color: Colors.white)),
-                  onPressed: () {
-                    setState(() {
-                      xPos = _image.width / 2;
-                      yPos = _image.height / 2;
-                    });
-                  },
-                ),
-                FlatButton(
-                  color: Colors.blue,
-                  child: Text("Get Data"),
-                  onPressed: () {
-                    _getSensorData();
-                  },
-                ),
-              ],
-            ),
-            _image != null
-                ? Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Container(
-                      width: width,
-                      height: height * 0.80,
-                      child: Zoom(
-                        doubleTapZoom: false,
-                        initZoom: 0,
-                        backgroundColor: Colors.transparent,
-                        width: _image.width.toDouble(),
-                        height: _image.height.toDouble(),
-                        child: Stack(
-                          children: <Widget>[
-                            CustomPaint(
-                              size: Size(width, height * 0.80),
-                              painter: ImageEditor(_image, circle),
-                              child: Container(),
+                          FlatButton(
+                            color: Colors.blue,
+                            child: Text("Get Data"),
+                            onPressed: () {
+                              _getSensorData();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Zoom(
+                          key: _zoomWidget,
+                          doubleTapZoom: true,
+                          initZoom: 0.0,
+                          zoomSensibility: 8,
+                          backgroundColor: Colors.transparent,
+                          width: _image.width.toDouble(),
+                          height: _image.height.toDouble(),
+                          child: GestureDetector(
+                            onLongPressStart: (details) {
+                              setState(() {
+                                _tapPosition = details;
+                              });
+                              print(details.globalPosition);
+                            },
+                            onLongPress: () {
+                              print("check");
+                              xPos = _tapPosition.localPosition.dx -
+                                  _image.height.toDouble() * 0.03;
+                              yPos = _tapPosition.localPosition.dy -
+                                  _image.height.toDouble() * 0.05;
+                            },
+                            child: Stack(
+                              fit: StackFit.expand, // add this
+                              overflow: Overflow.visible,
+                              children: <Widget>[
+                                SizedBox(
+                                  width: _image.width.toDouble(),
+                                  height: _image.height.toDouble(),
+                                  child: CustomPaint(
+                                    size: Size(_image.width.toDouble(),
+                                        _image.height.toDouble()),
+                                    painter: ImageEditor(_image, circle),
+                                    child: Container(),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: yPos,
+                                  left: xPos,
+                                  child: Icon(Icons.location_on,
+                                      color: Colors.red,
+                                      size: _image.height.toDouble() * 0.05),
+                                ),
+                              ],
                             ),
-                            Positioned(
-                              top: yPos,
-                              left: xPos,
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onPanStart: (details) => {
-                                  _dragging = true,
-                                },
-                                onPanEnd: (details) {
-                                  _dragging = false;
-                                },
-                                onPanUpdate: (details) {
-                                  if (_dragging) {
-                                    setState(() {
-                                      xPos += details.delta.dx;
-                                      yPos += details.delta.dy;
-                                    });
-                                  }
-                                },
-                                child: Icon(Icons.location_on,
-                                    color: Colors.red,
-                                    size: _image.height * 0.1),
-                              ),
-                            )
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  )
-                : SizedBox.shrink(),
-            ButtonBar(
-              buttonTextTheme: ButtonTextTheme.accent,
-              alignment: MainAxisAlignment.center,
-              children: <Widget>[
-                // FlatButton(
-                //   child: Icon(Icons.undo),
-                //   onPressed: () {
-                //     setState(() {
-                //       if (circle.length >= 1)
-                //         circle.removeLast();
-                //       else {
-                //         showInSnackBar("Points are empty");
-                //       }
-                //     });
-                //   },
-                // ),
-                FlatButton(
-                  child: Icon(Icons.settings_remote),
-                  onPressed: () {
-                    setState(() {
-                      Alert(
-                          context: context,
-                          title: "Edit IP Address",
-                          closeFunction: () {},
-                          content: Column(
-                            children: <Widget>[
-                              TextFormField(
-                                onChanged: (text) {
-                                  setState(() {
-                                    ip_address = text;
-                                  });
-                                },
-                                initialValue: ip_address,
-                                validator: (text) {
-                                  String zeroTo255 = "(\\d{1,2}|(0|1)\\" +
-                                      "d{2}|2[0-4]\\d|25[0-5])";
-                                  String regex = zeroTo255 +
-                                      "\\." +
-                                      zeroTo255 +
-                                      "\\." +
-                                      zeroTo255 +
-                                      "\\." +
-                                      zeroTo255;
-                                  RegExp regExp = new RegExp(regex);
-                                  if (!regExp.hasMatch(text)) {
-                                    return 'invalid ip address';
-                                  }
-                                  return null;
-                                },
-                                decoration: InputDecoration(
-                                  labelText: 'IP ADDRESS',
-                                ),
-                              ),
-                            ],
-                          ),
-                          buttons: [
-                            DialogButton(
-                              onPressed: () {
-                                Navigator.pop(context);
-                              },
-                              child: Text(
-                                "Done",
-                                style: TextStyle(
-                                    color: Colors.white, fontSize: 20),
-                              ),
-                            )
-                          ]).show();
-                    });
-                  },
-                ),
-                FlatButton(
-                  child: Icon(Icons.adjust),
-                  onPressed: () {
-                    Alert(
-                        context: context,
-                        title: "Edit circle radius",
-                        closeFunction: () {},
-                        content: Column(
-                          children: <Widget>[
-                            // Container(
-                            //   width: 400,
-                            //   height: 400,
-                            //   child: CustomPaint(
-                            //     painter: SampleCircle(_lowerValue),
-                            //     child: Container(),
-                            //   ),
-                            // ),
-                            Container(
-                              width: 300,
-                              height: 200,
-                              child: FlutterSlider(
-                                values: [_lowerValue],
-                                max: 300,
-                                min: 10,
-                                onDragging:
-                                    (handlerIndex, lowerValue, upperValue) {
-                                  setState(() {
-                                    _lowerValue = lowerValue;
-                                  });
-                                },
-                                jump: true,
-                              ),
-                            )
-                          ],
+                    ButtonBar(
+                      buttonTextTheme: ButtonTextTheme.accent,
+                      alignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        FlatButton(
+                          child: Icon(Icons.settings_remote),
+                          onPressed: () {
+                            showIpAddressAlertDialog();
+                          },
                         ),
-                        buttons: [
-                          DialogButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
-                            child: Text(
-                              "Done",
-                              style:
-                                  TextStyle(color: Colors.white, fontSize: 20),
-                            ),
-                          )
-                        ]).show();
-                  },
-                ),
-                FlatButton(
-                  child: Icon(Icons.undo),
-                  onPressed: () {
-                    setState(() {
-                      if (circle.length >= 1)
-                        circle.removeLast();
-                      else {
-                        showInSnackBar("Points are empty");
-                      }
-                    });
-                  },
-                ),
-                FlatButton(
-                  child: Icon(Icons.add_location),
-                  onPressed: () {
-                    if (temp != null) {
-                      setState(() {
-                        if (temp <= 15 && temp >= 10) {
-                          circle.add(Circle(
-                              Colors.blue[300],
-                              Offset(xPos + _image.height * 0.05,
-                                  yPos + _image.height * 0.07),
-                              _lowerValue,
-                              temp));
-                        } else if (temp <= 20 && temp > 15) {
-                          circle.add(Circle(
-                              Colors.blue,
-                              Offset(xPos + _image.height * 0.05,
-                                  yPos + _image.height * 0.07),
-                              _lowerValue,
-                              temp));
-                        } else if (temp <= 25 && temp > 20) {
-                          circle.add(Circle(
-                              Colors.blue[700],
-                              Offset(xPos + _image.height * 0.05,
-                                  yPos + _image.height * 0.07),
-                              _lowerValue,
-                              temp));
-                        } else if (temp <= 30 && temp > 25) {
-                          circle.add(Circle(
-                              Colors.red,
-                              Offset(xPos + _image.height * 0.05,
-                                  yPos + _image.height * 0.07),
-                              _lowerValue,
-                              temp));
-                        } else if (temp <= 35 && temp > 30) {
-                          circle.add(Circle(
-                              Colors.red[700],
-                              Offset(xPos + _image.height * 0.05,
-                                  yPos + _image.height * 0.07),
-                              _lowerValue,
-                              temp));
-                        } else if (temp <= 45 && temp > 35) {
-                          circle.add(Circle(
-                              Colors.red[900],
-                              Offset(xPos + _image.height * 0.05,
-                                  yPos + _image.height * 0.07),
-                              _lowerValue,
-                              temp));
-                        }
-                      });
-                    } else {
-                      showInSnackBar("Please click on Get Data first");
-                    }
-                  },
-                ),
-                FlatButton(
-                  child: Icon(Icons.save),
-                  onPressed: () async {
-                    Alert(
-                        context: context,
-                        title: "Enter file name",
-                        closeFunction: () {},
-                        content: Container(
-                          height: 200,
-                          width: double.maxFinite,
-                          child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: <Widget>[
-                                Text("File Name"),
-                                TextField(
-                                  onChanged: (text) {
-                                    setState(() {
-                                      fileName = text;
-                                    });
-                                  },
-                                )
-                              ]),
+                        FlatButton(
+                          child: Icon(Icons.adjust),
+                          onPressed: () {
+                            showCircleRadiusAlertDialog();
+                          },
                         ),
-                        // content: Row(
-                        //   children: <Widget>[
-                        //     Text("File Name"),
-                        //     TextField(
-                        //       onChanged: (text) {
-                        //         setState(() {
-                        //           fileName = text;
-                        //         });
-                        //       },
-                        //     )
-                        //   ],
-                        // ),
-                        buttons: [
-                          DialogButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
-                            child: Text(
-                              "Cancel",
-                              style:
-                                  TextStyle(color: Colors.white, fontSize: 20),
-                            ),
-                          ),
-                          DialogButton(
-                            onPressed: () async {
-                              ui.PictureRecorder recorder =
-                                  ui.PictureRecorder();
-                              Canvas canvas = Canvas(recorder);
-                              print(this.circle.length);
-                              ImageEditor painter =
-                                  ImageEditor(this._image, this.circle);
-                              Size s = new Size(_image.width.toDouble(),
-                                  _image.height.toDouble());
-                              painter.paint(canvas, s);
-                              ui.Image img = await recorder
-                                  .endRecording()
-                                  .toImage(_image.width, _image.height);
-
-                              final pngBytes = await img.toByteData(
-                                  format: ImageByteFormat.png);
-
-                              Directory directory =
-                                  await getExternalStorageDirectory();
-                              String path = directory.path + "/Download";
-                              print(path);
-                              await Directory('$path/$directoryName')
-                                  .create(recursive: true);
-
-                              File upload = await File('$path/${fileName}.png')
-                                  .writeAsBytes(pngBytes.buffer.asInt8List());
-                              Navigator.pop(context);
-                              showInSnackBar("Uploading please wait...");
-                              var res = await drive.upload(upload);
-                              if (res != null)
-                                showInSnackBar("File uploaded to drive ");
+                        FlatButton(
+                          child: Icon(Icons.undo),
+                          onPressed: () {
+                            setState(() {
+                              if (circle.length >= 1)
+                                circle.removeLast();
                               else {
-                                showInSnackBar("Failed to upload");
+                                showInSnackBar("Points are empty");
                               }
-                            },
-                            child: Text(
-                              "Upload",
-                              style:
-                                  TextStyle(color: Colors.white, fontSize: 20),
-                            ),
-                          ),
-                        ]).show();
-                  },
+                            });
+                          },
+                        ),
+                        FlatButton(
+                          child: Icon(Icons.add_location),
+                          onPressed: () {
+                            double xPosUpdated =
+                                xPos + _image.height.toDouble() * 0.025;
+                            double yPosUpdated =
+                                yPos + _image.height.toDouble() * 0.045;
+                            if (temp != null) {
+                              setState(() {
+                                if (temp <= 15 && temp >= 10) {
+                                  circle.add(Circle(
+                                      Colors.blue[300],
+                                      Offset(xPosUpdated, yPosUpdated),
+                                      _lowerValue,
+                                      temp));
+                                } else if (temp <= 20 && temp > 15) {
+                                  circle.add(Circle(
+                                      Colors.blue,
+                                      Offset(xPosUpdated, yPosUpdated),
+                                      _lowerValue,
+                                      temp));
+                                } else if (temp <= 25 && temp > 20) {
+                                  circle.add(Circle(
+                                      Colors.blue[700],
+                                      Offset(xPosUpdated, yPosUpdated),
+                                      _lowerValue,
+                                      temp));
+                                } else if (temp <= 30 && temp > 25) {
+                                  circle.add(Circle(
+                                      Colors.red,
+                                      Offset(xPosUpdated, yPosUpdated),
+                                      _lowerValue,
+                                      temp));
+                                } else if (temp <= 35 && temp > 30) {
+                                  circle.add(Circle(
+                                      Colors.red[700],
+                                      Offset(xPosUpdated, yPosUpdated),
+                                      _lowerValue,
+                                      temp));
+                                } else if (temp <= 45 && temp > 35) {
+                                  circle.add(Circle(
+                                      Colors.red[900],
+                                      Offset(xPosUpdated, yPosUpdated),
+                                      _lowerValue,
+                                      temp));
+                                }
+                              });
+                            } else {
+                              showInSnackBar("Please click on Get Data first");
+                            }
+                          },
+                        ),
+                        FlatButton(
+                          child: Icon(Icons.save),
+                          onPressed: () async {
+                            showSaveFileAlertDialog();
+                          },
+                        )
+                      ],
+                    )
+                  ],
                 )
-              ],
-            )
-          ],
-        ),
-      ),
+              : Center(
+                  child: Container(
+                    color: Colors.lightBlue,
+                    child: Center(child: Text("Loading...")),
+                  ),
+                )),
     );
   }
 }
@@ -529,40 +557,11 @@ class ImageEditor extends CustomPainter {
   final List<Circle> circle;
   Picture picture;
   ImageEditor(this.image, this.circle) : super();
-  void paintImage(
-      ui.Image image, Rect outputRect, Canvas canvas, Paint paint, BoxFit fit) {
-    final Size imageSize =
-        Size(image.width.toDouble(), image.height.toDouble());
-    final FittedSizes sizes = applyBoxFit(fit, imageSize, outputRect.size);
-    final Rect inputSubrect =
-        Alignment.center.inscribe(sizes.source, Offset.zero & imageSize);
-    final Rect outputSubrect =
-        Alignment.center.inscribe(sizes.destination, outputRect);
-    canvas.drawImageRect(image, inputSubrect, outputSubrect, paint);
-  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    // TODO: implement paint
-
     Paint paint = new Paint()..color = Colors.yellow;
-
-    final Rect rect = Offset.zero & size;
-    final Size imageSize =
-        Size(image.width.toDouble(), image.height.toDouble());
-    FittedSizes sizes = applyBoxFit(BoxFit.contain, imageSize, size);
-    final Rect inputSubRect =
-        Alignment.center.inscribe(sizes.source, Offset.zero & imageSize);
-    final Rect outputSubRect =
-        Alignment.center.inscribe(sizes.destination, rect);
-
-    canvas.drawImageRect(
-      image,
-      inputSubRect,
-      outputSubRect,
-      paint,
-    );
-
+    canvas.drawImage(image, Offset.zero, paint);
     double avg = 0;
     for (var item in circle) {
       Paint circlePaint = new Paint()..color = item.color;
@@ -574,7 +573,7 @@ class ImageEditor extends CustomPainter {
                   TextStyle(color: Colors.white, fontSize: item.radius * 0.4)),
           textAlign: TextAlign.center,
           textDirection: TextDirection.ltr)
-        ..layout(maxWidth: size.width - 100.0 - 100.0);
+        ..layout(maxWidth: size.width - 100.0);
       canvas.drawCircle(item.offset, item.radius, circlePaint);
       textPainter.paint(
           canvas,
@@ -589,30 +588,20 @@ class ImageEditor extends CustomPainter {
                   avg.floor().toInt().toString() +
                   "\u00B0 C",
               style: TextStyle(
-                  color: Colors.black, fontSize: image.height * 0.05)),
+                  color: Colors.black, fontSize: image.height * 0.02)),
           textAlign: TextAlign.center,
           textDirection: TextDirection.ltr)
-        ..layout(maxWidth: size.width - 100.0 - 100.0);
+        ..layout(maxWidth: size.width - 100.0);
       textPainter2.paint(canvas,
-          Offset(0, size.height.toDouble() - size.height.toDouble() * 0.1));
+          Offset(0, size.height.toDouble() - size.height.toDouble() * 0.04));
+    }
+    @override
+    bool hitTest(Offset position) {
+      // TODO: implement hitTest
+      return super.hitTest(position);
     }
   }
 
   @override
   bool shouldRepaint(CustomPainter oldDelegate) => true;
 }
-
-// class SampleCircle extends CustomPainter {
-//   final double radius;
-
-//   SampleCircle(this.radius) : super();
-//   @override
-//   void paint(Canvas canvas, Size size) {
-//     // TODO: implement paint
-//     Paint paint = new Paint()..color = Colors.red;
-//     canvas.drawCircle(Offset(size.width / 2, size.height / 2), radius, paint);
-//   }
-
-//   @override
-//   bool shouldRepaint(CustomPainter oldDelegate) => true;
-// }
